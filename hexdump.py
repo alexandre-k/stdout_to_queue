@@ -13,33 +13,41 @@ class FilterOutput:
         self.cmd = cmd.split(' ')
         self.words = {b'f7', b'c3', b'c9'}
         self.counter = {}
-        self.thread = Thread(target=self.filter_output)
+        self.reader = Thread(target=self.read_output)
+        self.filter_words = lambda line: [word for word in self.words if word in line]
 
     def start(self):
-        self.thread.start()
+        self.reader.start()
 
     def stop(self):
         self.hexdump.terminate()
         self.hexdump.wait()
-        self.thread.join()
+        self.reader.join()
 
     def read_output(self):
+        """Read output and send values to generators if it matches words."""
+        process_output = self.process_filtering()
+        process_output.send(None)
         self.hexdump = Popen(self.cmd, stdout=PIPE)
         for line in iter(self.hexdump.stdout.readline, b''):
-            yield line
+            print(line)
+            result = self.filter_words(line)
+            if result: process_output.send(result)
 
-
-    def filter_output(self):
-        for line in self.read_output():
-            result = [word for word in self.words if word in line]
-
+    def process_filtering(self):
+        while True:
+            word = yield
+            if b'f7' in word:
+                self.do_something()
+            if b'c3' in word:
+                self.do_something_else()
             sys.stdout.flush()
 
-            if b'f7' in result:
-                print(line)
-            if b'c3' in result:
-                print(line)
-            sys.stdout.flush()
+    def do_something(self):
+        return 'nothing'
+
+    def do_something_else(self):
+        return 'nothing more'
 
 
 filter_output = FilterOutput('hexdump -C /dev/urandom')
